@@ -259,7 +259,11 @@ void VolumeFileManager::loadDirectries(vector<string> &dirPathes)
 		//.rawファイルを読み込む
 		m_dirs.push_back( new ImagesInDir() );
 		ImagesInDir *ImgsDir = m_dirs.back();
-
+		
+		// note: zPosはステージの高さ。カメラに映る資料の高さは逆転する（ステージが高いほど下が映る）
+		//その分を補正するため -1をかける
+		zPos = -zPos;
+		
 		const int fNum = (int)files.size();
 		ImgsDir->m_imgPathes = files;
 		ImgsDir->m_zPosMin = zPos - m_pitch * fNum / 2.0 ;
@@ -273,7 +277,7 @@ void VolumeFileManager::loadDirectries(vector<string> &dirPathes)
 	m_D = (int) ( ( m_maxZpos - m_minZpos) / m_pitch );
 
 	fprintf( stderr, "pitch : %f\n", m_pitch);
-	fprintf( stderr, "zMin max : %f %f\n", m_minZpos, m_maxZpos);
+	fprintf( stderr, "z_pos min max : %f %f\n", m_minZpos, m_maxZpos);
 	fprintf( stderr, "%d %d %d\n", m_W, m_H, m_D );
 
 
@@ -307,17 +311,26 @@ void VolumeFileManager::getSliceImg_Zth_slice( int z, short *trgt2DimgArray )
 	int    trgtDirI        = -1 ;
 	int    trgtSliceI      = -1 ;
 
-	for( int di = 0; di < (int)m_dirs.size(); ++di ) if( m_dirs[di]->m_zPosMin <= zPos && zPos <= m_dirs[di]->m_zPosMax )
+	for( int di = 0; di < (int)m_dirs.size(); ++di ) 
 	{
+		//fprintf(stderr, "%d %f min, max : %f %f\n", di, zPos, m_dirs[di]->m_zPosMin, m_dirs[di]->m_zPosMax);
+		if (zPos < m_dirs[di]->m_zPosMin || m_dirs[di]->m_zPosMax < zPos) continue;
+		
+
 		double ofst = min( zPos - m_dirs[di]->m_zPosMin, m_dirs[di]->m_zPosMax - zPos );
 		if( ofst > maxDistFromEdge )
 		{
+			//fprintf(stderr, "hit\n");
 			maxDistFromEdge = ofst;
 			trgtDirI   = di;
 			trgtSliceI = (int)( (zPos - m_dirs[di]->m_zPosMin) / m_pitch );
+			//fprintf(stderr, "hit  %d %d \n", trgtDirI, trgtSliceI);
+
 			t_cropI( trgtSliceI, 0, (int)m_dirs[di]->m_imgPathes.size() - 1);
 		}
 	}
+	
+	fprintf(stderr, "result %d %d\n\n", trgtDirI, trgtSliceI);
 
 	if( trgtDirI != -1 && trgtSliceI != -1 ){
 		if( t_readRawImage( m_dirs[trgtDirI]->m_imgPathes[trgtSliceI].c_str(), m_W,m_H,  trgt2DimgArray ) ) return;
